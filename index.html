@@ -195,6 +195,122 @@
             }
         };
 
+// =========================================================
+        // 音声・効果音の設定
+        // =========================================================
+        const sePlayer = new Audio("剣を抜く.mp3");
+        sePlayer.volume = 0.5; 
+
+        function playSuperChatSynthSE() {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            
+            const ctx = new AudioContext();
+            const now = ctx.currentTime;
+            
+            const masterGain = ctx.createGain();
+            masterGain.gain.setValueAtTime(1.6, now);
+            masterGain.connect(ctx.destination);
+            
+            // 音色1：アルペジオベル
+            const bellFreqs = [523.25, 659.25, 783.99, 1046.5]; 
+            bellFreqs.forEach((freq, index) => {
+                const timeOffset = index * 0.05;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                osc.type = index % 2 === 0 ? 'sine' : 'triangle';
+                osc.frequency.setValueAtTime(freq, now + timeOffset);
+                osc.frequency.exponentialRampToValueAtTime(freq * 1.2, now + timeOffset + 0.5);
+                
+                gain.gain.setValueAtTime(0.35, now + timeOffset);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + timeOffset + 0.5);
+                
+                osc.connect(gain);
+                gain.connect(masterGain);
+                
+                osc.start(now + timeOffset);
+                osc.stop(now + timeOffset + 0.55);
+            });
+            
+            // 音色2：クラッカー破裂音
+            const bufferSize = ctx.sampleRate * 0.4; 
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; }
+            
+            const crackerNoise = ctx.createBufferSource();
+            crackerNoise.buffer = buffer;
+            
+            const crackerFilter = ctx.createBiquadFilter();
+            crackerFilter.type = 'bandpass';
+            crackerFilter.frequency.setValueAtTime(1800, now);
+            
+            const crackerGain = ctx.createGain();
+            crackerGain.gain.setValueAtTime(0.8, now);
+            crackerGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+            
+            crackerNoise.connect(crackerFilter);
+            crackerFilter.connect(crackerGain);
+            crackerGain.connect(masterGain);
+            
+            const crackerThump = ctx.createOscillator();
+            const thumpGain = ctx.createGain();
+            crackerThump.type = 'triangle';
+            crackerThump.frequency.setValueAtTime(250, now);
+            crackerThump.frequency.exponentialRampToValueAtTime(40, now + 0.1);
+            thumpGain.gain.setValueAtTime(0.6, now);
+            thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+            
+            crackerThump.connect(thumpGain);
+            thumpGain.connect(masterGain);
+            
+            crackerNoise.start(now);
+            crackerThump.start(now);
+            crackerNoise.stop(now + 0.4);
+            crackerThump.stop(now + 0.4);
+
+            // 音色3：シンバル
+            const cymbalFreqs = [312, 520, 630, 810, 1150, 1400];
+            cymbalFreqs.forEach(f => {
+                const osc = ctx.createOscillator();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(f, now);
+                
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'highpass';
+                filter.frequency.setValueAtTime(7500, now);
+                
+                const cymbalGain = ctx.createGain();
+                cymbalGain.gain.setValueAtTime(0.25, now);
+                cymbalGain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+                
+                osc.connect(filter);
+                filter.connect(cymbalGain);
+                cymbalGain.connect(masterGain);
+                
+                osc.start(now);
+                osc.stop(now + 1.3);
+            });
+            
+            const cymbalNoise = ctx.createBufferSource();
+            cymbalNoise.buffer = buffer;
+            const cymbalNoiseFilter = ctx.createBiquadFilter();
+            cymbalNoiseFilter.type = 'highpass';
+            cymbalNoiseFilter.frequency.setValueAtTime(8500, now);
+            
+            const cymbalNoiseGain = ctx.createGain();
+            cymbalNoiseGain.gain.setValueAtTime(0.35, now);
+            cymbalNoiseGain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+            
+            cymbalNoise.connect(cymbalNoiseFilter);
+            cymbalNoiseFilter.connect(cymbalNoiseGain);
+            cymbalNoiseGain.connect(masterGain);
+            
+            cymbalNoise.start(now);
+            cymbalNoise.stop(now + 1.1);
+        }
+
         // =========================================================
         // 20秒無言検知・自動トーク機能
         // =========================================================
@@ -229,39 +345,51 @@
         // =========================================================
         
         // カットイン表示機能
-        function executePhraseCutIn(text) {
-            const cutInBox = document.getElementById('phrase-cutin-box');
-            const cutInText = document.getElementById('phrase-text-content');
-            
-            cutInText.innerText = text;
-            
-            // アニメーションリセット
-            cutInBox.classList.remove('slide-in', 'slide-out');
-            void cutInBox.offsetWidth; // 強制再描画
-            
-            cutInBox.classList.add('slide-in'); // シュバッと入る
-            
-            setTimeout(() => {
-                cutInBox.classList.remove('slide-in');
-                cutInBox.classList.add('slide-out'); // シュバッと出る
-                
-                setTimeout(() => {
-                    cutInBox.classList.remove('slide-out');
-                }, 300);
-            }, 3000); // 3秒間表示
-        }
+function executePhraseCutIn(text) {
+    const cutInBox = document.getElementById('phrase-cutin-box');
+    const cutInText = document.getElementById('phrase-text-content');
+    
+    cutInText.innerText = text;
+    
+    cutInBox.classList.remove('slide-in', 'slide-out');
+    void cutInBox.offsetWidth; 
+    
+    cutInBox.classList.add('slide-in'); 
+
+    // ▼ 【追加】カットイン表示のタイミングでSEを鳴らす
+    setTimeout(() => {
+        try {
+            sePlayer.currentTime = 0; 
+            sePlayer.play();          
+        } catch (audioErr) { console.error(audioErr); }
+    }, 300);
+    
+    setTimeout(() => {
+        cutInBox.classList.remove('slide-in');
+        cutInBox.classList.add('slide-out'); 
+        
+        setTimeout(() => {
+            cutInBox.classList.remove('slide-out');
+        }, 300);
+    }, 3000); 
+}
 
         // スパチャポップアップ表示機能
-        function triggerSuperChatEffects() {
-            const scBox = document.getElementById('sc-popup-box');
-            scBox.classList.add('show');
-            
-            fireConfetti(); // 紙吹雪発射！
-            
-            setTimeout(() => {
-                scBox.classList.remove('show');
-            }, 4000); // 4秒間表示
-        }
+function triggerSuperChatEffects() {
+    const scBox = document.getElementById('sc-popup-box');
+    scBox.classList.add('show');
+    
+    fireConfetti(); // 紙吹雪発射！
+    
+    // ▼ 【追加】スパチャの合成音（SE）を鳴らす
+    setTimeout(() => {
+        playSuperChatSynthSE();
+    }, 50);
+
+    setTimeout(() => {
+        scBox.classList.remove('show');
+    }, 4000); 
+}
 
         // 紙吹雪パーティクルシステム
         const canvas = document.getElementById('canvas-confetti');
