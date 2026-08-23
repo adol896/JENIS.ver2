@@ -201,11 +201,17 @@
         const sePlayer = new Audio("剣を抜く.mp3");
         sePlayer.volume = 0.5; 
 
-        function playSuperChatSynthSE() {
+function playSuperChatSynthSE() {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             if (!AudioContext) return;
             
             const ctx = new AudioContext();
+            
+            // ▼ 【追加】ブラウザの制限で停止しているAudioContextを強制的に再開させる
+            if (ctx.state === 'suspended') {
+                ctx.resume();
+            }
+            
             const now = ctx.currentTime;
             
             const masterGain = ctx.createGain();
