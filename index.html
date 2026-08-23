@@ -137,6 +137,7 @@
             width: 100%; height: 100%; z-index: 70; pointer-events: none;
         }
     </style>
+    <!-- data.js を読み込む -->
     <script src="data.js"></script>
 </head>
 <body>
@@ -195,7 +196,7 @@
         };
 
         // =========================================================
-        // 【追加】20秒無言検知・自動トーク機能
+        // 20秒無言検知・自動トーク機能
         // =========================================================
         let silenceTimer = null;
         const SILENCE_LIMIT = 20 * 1000; // 20秒
@@ -210,13 +211,11 @@
         }
 
         function triggerSilenceTalk() {
-            // アシスタントが喋っている最中ならスキップしてタイマーやり直し
             if (isSpeaking) {
                 resetSilenceTimer();
                 return;
             }
 
-            // data.js で定義されている silencePhrases 変数を使用
             if (typeof silencePhrases !== 'undefined' && silencePhrases[currentLang] && silencePhrases[currentLang].length > 0) {
                 const phrases = silencePhrases[currentLang];
                 const randomIndex = Math.floor(Math.random() * phrases.length);
@@ -225,9 +224,114 @@
             }
         }
 
+        // =========================================================
+        // カットイン ＆ スパチャアニメーション ＆ 紙吹雪機能
+        // =========================================================
+        
+        // カットイン表示機能
+        function executePhraseCutIn(text) {
+            const cutInBox = document.getElementById('phrase-cutin-box');
+            const cutInText = document.getElementById('phrase-text-content');
+            
+            cutInText.innerText = text;
+            
+            // アニメーションリセット
+            cutInBox.classList.remove('slide-in', 'slide-out');
+            void cutInBox.offsetWidth; // 強制再描画
+            
+            cutInBox.classList.add('slide-in'); // シュバッと入る
+            
+            setTimeout(() => {
+                cutInBox.classList.remove('slide-in');
+                cutInBox.classList.add('slide-out'); // シュバッと出る
+                
+                setTimeout(() => {
+                    cutInBox.classList.remove('slide-out');
+                }, 300);
+            }, 3000); // 3秒間表示
+        }
+
+        // スパチャポップアップ表示機能
+        function triggerSuperChatEffects() {
+            const scBox = document.getElementById('sc-popup-box');
+            scBox.classList.add('show');
+            
+            fireConfetti(); // 紙吹雪発射！
+            
+            setTimeout(() => {
+                scBox.classList.remove('show');
+            }, 4000); // 4秒間表示
+        }
+
+        // 紙吹雪パーティクルシステム
+        const canvas = document.getElementById('canvas-confetti');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        let particles = [];
+        let animatingConfetti = false;
+
+        function fireConfetti() {
+            const colors = ['#ff4e50', '#f9d423', '#00f3ff', '#ffffff', '#ff00ff'];
+            particles = [];
+            for(let i=0; i<120; i++) {
+                particles.push({
+                    x: canvas.width / 2,
+                    y: canvas.height / 2 + 50,
+                    r: Math.random() * 6 + 4,
+                    dx: Math.random() * 30 - 15,
+                    dy: Math.random() * -20 - 10,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    tilt: Math.floor(Math.random() * 10) - 10,
+                    tiltAngle: 0,
+                    tiltAngleInc: (Math.random() * 0.07) + 0.05
+                });
+            }
+            if(!animatingConfetti) animateConfetti();
+        }
+
+        function animateConfetti() {
+            animatingConfetti = true;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            particles.forEach((p, index) => {
+                p.tiltAngle += p.tiltAngleInc;
+                p.y += (Math.cos(p.tiltAngle) + 1 + p.r / 2) / 2;
+                p.x += Math.sin(p.tiltAngle) * 2;
+                p.dy += 0.4; // 重力
+                p.x += p.dx;
+                p.y += p.dy;
+                
+                ctx.beginPath();
+                ctx.lineWidth = p.r;
+                ctx.strokeStyle = p.color;
+                ctx.moveTo(p.x + p.tilt + p.r, p.y);
+                ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r);
+                ctx.stroke();
+                
+                // 画面外に出たパーティクルを削除
+                if(p.y > canvas.height) {
+                    particles.splice(index, 1);
+                }
+            });
+            
+            if(particles.length > 0) {
+                requestAnimationFrame(animateConfetti);
+            } else {
+                animatingConfetti = false;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
 
         // =========================================================
-        // 1. AI Assistant "Genis" (音声読み上げ & アバター制御)
+        // AI Assistant "Genis" (音声読み上げ & アバター制御)
         // =========================================================
         let isSpeaking = false;
         let currentLang = 'ja';
@@ -358,27 +462,23 @@
         function runAssistantVoice(fullText, lang) {
             if (synthesizer.speaking) synthesizer.cancel(); 
             
-            // ★追加：カッコ（）で囲まれたト書き部分を音声読み上げから削除する処理
             const textForSpeech = fullText.replace(/（[^）]*）|\([^)]*\)/g, '').trim();
 
-            // 字幕用には元のテキスト(ト書きあり)、音声用にはト書きなしテキストを渡す
             const subtitleChunks = splitTextForGenis(fullText, lang);
             const speechChunks = splitTextForGenis(textForSpeech, lang);
             
             let currentChunkIndex = 0;
 
             function playNextChunk() {
-                // 音声か字幕のどちらかが終わるまでループ
                 if (currentChunkIndex >= subtitleChunks.length && currentChunkIndex >= speechChunks.length) {
                     isSpeaking = false;
-                    resetSilenceTimer(); // AIが喋り終わったら無音タイマーを再開
+                    resetSilenceTimer(); 
                     updateAvatarState(); 
                     aiStatusMsg.innerText = "STANDBY";
                     aiSubtitleBox.classList.remove('active');
                     return;
                 }
 
-                // 字幕の表示（ト書きあり）
                 if (currentChunkIndex < subtitleChunks.length) {
                     aiSubtitleBox.classList.remove('active');
                     setTimeout(() => {
@@ -387,7 +487,6 @@
                     }, 150);
                 }
 
-                // 音声の再生（ト書きなし）
                 if (currentChunkIndex < speechChunks.length) {
                     const utterance = new SpeechSynthesisUtterance(speechChunks[currentChunkIndex]);
                     utterance.lang = (lang === 'en') ? 'en-US' : 'ja-JP';
@@ -400,7 +499,7 @@
 
                     utterance.onstart = () => {
                         isSpeaking = true;
-                        stopSilenceTimer(); // AIが喋っている間は無音タイマーを停止
+                        stopSilenceTimer(); 
                         updateAvatarState(); 
                         aiStatusMsg.innerText = "TALKING";
                     };
@@ -411,7 +510,6 @@
                     };
                     synthesizer.speak(utterance);
                 } else {
-                    // 音声がもうない場合は字幕だけ進めるためにタイマーで次へ
                     setTimeout(() => {
                         currentChunkIndex++;
                         playNextChunk();
@@ -432,20 +530,17 @@
         setInterval(() => { triggerTalk(); }, TALK_INTERVAL);
 
         // =========================================================
-        // 2. 音声認識 & スーパーチャットエフェクト & カットイン
+        // 音声認識 
         // =========================================================
         let isRecognitionActive = false; 
         let voiceRecognition = null;
         
-        // ... (紙吹雪やSEのコードは長いので省略していますが、元のまま動作します) ...
-
         const WebKitSpeech = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (WebKitSpeech) {
             voiceRecognition = new WebKitSpeech();
             voiceRecognition.continuous = true;      
             voiceRecognition.interimResults = false; 
 
-            // ★修正ポイント：onstartのタイマーリセットを削除
             voiceRecognition.onstart = () => { 
                 isRecognitionActive = true; 
             };
@@ -454,30 +549,33 @@
                 isRecognitionActive = false; 
                 safeStartRecognition(); 
             };
+            
             voiceRecognition.onerror = (e) => { 
                 if (e.error === "not-allowed") isRecognitionActive = false; 
             };
 
-            // ★修正ポイント：onspeechstart / onspeechend を丸ごと削除しました。
-
-            // ★修正ポイント：文字認識された時（onresult）だけタイマーをリセット
+            // ここで言葉を拾ってカットインやスパチャを呼び出します
             voiceRecognition.onresult = (event) => {
-                resetSilenceTimer(); // ここでのみタイマーをリセット！
+                resetSilenceTimer(); // 言葉を拾ったら20秒タイマーをリセット
 
                 const currentIndex = event.resultIndex;
                 const heardPhrase = event.results[currentIndex][0].transcript.trim().toLowerCase();
                 const config = langConfig[currentLang];
 
+                console.log("認識した言葉:", heardPhrase); // デバッグ用（F12の開発者ツールで確認可能）
+
+                // スパチャ判定
                 const isSC = config.scKeywords.some(keyword => heardPhrase.includes(keyword.toLowerCase()));
                 if (isSC) {
-                    triggerSuperChatEffects(); // 紙吹雪とSE（元のコードのまま）
+                    triggerSuperChatEffects();
                     return;
                 }
 
+                // カットイン判定
                 for (const rule of config.cutInRules) {
                     const matched = rule.keywords.some(kw => heardPhrase.includes(kw.toLowerCase()));
                     if (matched) {
-                        executePhraseCutIn(rule.text); // カットイン（元のコードのまま）
+                        executePhraseCutIn(rule.text);
                         return;
                     }
                 }
@@ -507,7 +605,7 @@
             if (e.target === toggleBtn || e.target === toggleLangBtn) return;
             
             safeStartRecognition();
-            resetSilenceTimer(); // クリックした瞬間から20秒カウントを開始
+            resetSilenceTimer(); 
             triggerTalk();
         });
     </script>
