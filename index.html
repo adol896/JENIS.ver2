@@ -481,15 +481,65 @@
 
               speechSynthesis.getVoices();
 
-              const oncePhrases = {
-                  ja: ["最近読んだ本や漫画で、続きが気になっている作品ってありますか？"],
-                  en: ["What was the best food you ate this past week?"]
-              };
+        const oncePhrases = {
+            ja: [
+                "この1週間の中で、一番「美味しかったなぁ」って思った食べ物は何ですか？",
+                "ここ1ヶ月の間で、買って良かった便利グッズやアイテムって何かありましたか？",
+                "ここ最近で「これ美味しくてハマりそう！」ってなったお菓子やアイス、ありましたか？",
+                "この1週間で、思わず「衝動買い」しちゃったものって何かありますか？",
+                "最近コンビニやスーパーで見かけて、つい買っちゃった新商品ってありますか？",
+                "この1週間で、一番「フフッ」って笑っちゃった出来事って何でしたか？",
+                "最近おうちの中や自分の部屋で、新しくレイアウトを変えた場所ってありますか？",
+                "この1週間の中で、一番テンションが上がった瞬間ってどんな時でしたか？",
+                "ここ1ヶ月の間でハマった動画やチャンネルって、何かありますか？",
+                "この1週間で「この曲いいな」ってリピート再生した音楽はありますか？",
+                "最近読んだ本や漫画で、続きが気になっている作品ってありますか？",
+                "この1週間で、ぐっすり気持ちよく眠れた日ってありましたか？",
+                "最近、心がフッと軽くなった出来事って何かありましたか？",
+                "最近食べたアイスで、おすすめの味があったらぜひ知りたいです。"
+            ],
+            en: [
+                "What was the best food you ate this past week?",
+                "Have you bought anything really useful or fun in the last month?",
+                "Is there any snack or drink you've been obsessed with lately?",
+                "Did anything make you smile or laugh out loud this past week?",
+                "Have you discovered any cool videos or YouTube channels recently?",
+                "What song have you been playing on repeat this week?",
+                "Did you have a chance to go anywhere fun or scenic this month?",
+                "Was there a moment this week when you felt super energized or excited?",
+                "Have you tried playing any new games or apps lately?",
+                "What is something small that made your day a little brighter recently?"
+            ]
+        };
 
-              const loopPhrases = {
-                  ja: ["ちょっと一息つきませんか？冷たい飲み物でも一口どうぞ。"],
-                  en: ["Feel free to grab a drink and get comfortable, everyone!"]
-              };
+        const loopPhrases = {
+            ja: [
+                "いい雰囲気ですね。このまったりした空気、とても落ち着きます。",
+                "画面の向こうの皆さんも、お茶でも飲みながらのんびり見ていってくださいね。",
+                "今日もマイペースに楽しんでいきましょう。",
+                "ちょっと一息つきませんか？冷たい飲み物でも一口どうぞ。",
+                "無理せず、自分のペースで。楽しむことが一番ですからね。",
+                "ふと気になったんですが、皆さんは今、どんな体勢で見てくれていますか？",
+                "皆さんの好きな飲み物って何ですか？手元に何か用意されていますか？",
+                "今日もお仕事や学校、家事など、皆さん本当にお疲れ様でした。",
+                "画面の前のあなた、まばたきを忘れていませんか？ぎゅっと閉じて目を休めてくださいね。",
+                "焦らず、一歩ずつ進んでいきましょう。",
+                "失敗は成功のもと。次のチャレンジが楽しみですね。",
+                "少しストレッチでもしてみませんか？背筋を伸ばすと気持ちいいですよ。"
+            ],
+            en: [
+                "I really love this relaxed atmosphere. It's so cozy here.",
+                "Feel free to grab a drink and get comfortable, everyone!",
+                "Let me know in the chat if you're having a good day today.",
+                "Don't forget to take a short break and stretch a little!",
+                "How is everyone doing today? Are you sitting comfortably?",
+                "Taking things step by step is always the best way.",
+                "Thank you all for spending your time here with us today.",
+                "Remember to blink and give your eyes a quick rest!",
+                "Every small step counts. You're doing awesome!",
+                "Mistakes are just part of the fun. Let me know what you think!"
+            ]
+        };
 
               const currentLoopDecks = { ja: [], en: [] };
               const ONCE_PHRASE_CHANCE = 0.3;
