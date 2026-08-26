@@ -14,7 +14,7 @@
 
       /* [1] AI Assistant (Genis) UI */
       #assistant-container {
-          position: absolute; bottom: 20px; left: 10px;
+          position: absolute; bottom: -20px; left: 10px;
           display: flex; flex-direction: column; align-items: center; z-index: 10;
           background: transparent !important;
       }
@@ -53,7 +53,7 @@
           transition: opacity 0.3s ease;
       }
       .controls-row {
-          display: flex; gap: 8px; margin-top: 10px;
+          display: flex; gap: 8px; margin-top: 10px; margin-bottom: 25px;
       }
       .ui-btn {
           background: rgba(15, 20, 35, 0.85); border: 1px solid #00f3ff; color: #00f3ff;
@@ -170,697 +170,627 @@
     </div>
 
     <script>
-      // 人工無脳のクラス定義
-      class NativeBot {
-        constructor() {
-          this.segmenter = new Intl.Segmenter('ja', { granularity: 'word' });
-          this.stopWords = new Set(['です', 'ます', 'は', 'が', 'を', 'に', 'の', 'と', 'で', 'から', 'まで', 'ね', 'よ', 'な', 'か', '？', '！', '。', '、', 'is', 'a', 'the', 'to', 'in', 'it', 'you', 'i']);
-          this.state = { userTopic: null, turnCount: 0 };
+              // =========================================================
+              // 言語別 設定定義 (スパチャ・カットイン・音声認識)
+              // =========================================================
+              const langConfig = {
+                  ja: {
+                      recognitionLang: 'ja-JP',
+                      scDefaultText: "ありがとうございます！",
+                      scKeywords: ["スパチャ", "スーパーチャット", "ありがとうございまーす", "ありがとうございます", "感謝"],
+                      cutInRules: [
+                          { keywords: ["ここだ"], text: "ここだ！" },
+                          { keywords: ["ここで決める", "これで決める"], text: "これで決める！" }
+                      ]
+                  },
+                  en: {
+                      recognitionLang: 'en-US',
+                      scDefaultText: "THANK YOU SO MUCH!",
+                      scKeywords: ["super chat", "superchat", "thank you", "thanks for the support", "thanks"],
+                      cutInRules: [
+                          { keywords: ["this is it", "here goes", "now"], text: "THIS IS IT!" },
+                          { keywords: ["finish this", "let's do this", "take this"], text: "LET'S DO THIS!" }
+                      ]
+                  }
+              };
 
-          // パターンマッチ応答辞書
-          this.patternDict = {
-            ja: [
-              { pattern: /こんにちは|おはよう|こんばんは|はじめまして/, responses: ["こんにちは！今日もよろしくね！", "やあやあ！調子はどう？", "おはよう！今日も楽しんでいこう！"] },
-              { pattern: /ありがとう|感謝|サンキュー/, responses: ["どういたしまして！", "こちらこそ、いつもありがとう！", "お役に立てて嬉しいよ！"] },
-              { pattern: /つかれた|疲れた|眠い|しんどい/, responses: ["無理しないで、少し休憩しようね。", "お疲れ様！ゆっくり休んでね。", "あたたかい飲み物でも飲んで一息つこう！"] },
-              { pattern: /すごい|ヤバい|最高|楽しい|おもしろい/, responses: ["ほんと！？それ最高だね！", "わぁ、聞いてるこっちまで嬉しくなっちゃう！", "いいね！もっと聞かせて！"] },
-              { pattern: /何|なに|どう|なぜ|なんで/, responses: ["うーん、どうだろうね？一緒に考えてみよう！", "気になるね！詳しく教えて！", "面白い疑問だね！"] }
-            ],
-            en: [
-              { pattern: /hello|hi|hey|good morning|good evening/i, responses: ["Hello there! How's it going?", "Hey! Glad to talk with you!", "Hi! Hope you're having a great day!"] },
-              { pattern: /thank/i, responses: ["You're very welcome!", "Anytime! Happy to help!", "My pleasure!"] },
-              { pattern: /tired|sleepy|exhausted/i, responses: ["Make sure to take a good rest!", "You worked hard! Take it easy.", "How about getting some tea and relaxing?"] },
-              { pattern: /awesome|cool|great|amazing|fun/i, responses: ["That sounds fantastic!", "Wow, that's awesome!", "Love that energy! Tell me more!"] },
-              { pattern: /what|how|why|where|who/i, responses: ["Hmm, good question! What do you think?", "That's super interesting! Tell me more.", "I'd love to know more about that!"] }
-            ]
-          };
-
-          // キーワード展開用会話テンプレート
-          this.templates = {
-            ja: [
-              "{topic}についてもっと詳しく教えて！",
-              "そういえば最近、{topic}の話をよく聞くね。",
-              "{topic}かぁ。個人的には結構好きだよ！",
-              "{topic}って聞いて、なんだかわくわくしてきた！",
-              "なるほど、{topic}の話だね！どんなところが魅力的？",
-              "{topic}といえば、何かおすすめとかある？"
-            ],
-            en: [
-              "Tell me more about {topic}!",
-              "Speaking of {topic}, I've been hearing a lot about that lately.",
-              "{topic}, huh? I actually find that pretty cool!",
-              "When you mention {topic}, it gets me super curious!",
-              "Ah, {topic}! What's the best part about it?",
-              "Do you have any recommendations for {topic}?"
-            ]
-          };
-
-          // 多様化した相づちリスト
-          this.fillerResponses = {
-            ja: [
-              "ふむふむ、なるほどね！",
-              "へえー！それは知らなかったな！",
-              "うんうん、それでどうなったの？",
-              "面白い視点だね！",
-              "なるほど、そういう考え方もあるのかぁ。",
-              "うん、しっかり聞いてるよ！"
-            ],
-            en: [
-              "I see, that makes sense!",
-              "Oh, really? That's good to know!",
-              "Mmhmm, tell me more!",
-              "That's a neat perspective!",
-              "Yeah, I'm listening!"
-            ]
-          };
-
-          this.markovDict = {};
-        }
-
-        tokenize(text) {
-          const segments = this.segmenter.segment(text);
-          return Array.from(segments).filter(s => s.isWordLike).map(s => s.segment);
-        }
-
-        extractKeywords(tokens) {
-          return tokens.filter(token => !this.stopWords.has(token.toLowerCase()) && token.length > 1);
-        }
-
-        trainMarkov(tokens) {
-          for (let i = 0; i < tokens.length - 1; i++) {
-            const current = tokens[i];
-            const next = tokens[i + 1];
-            if (!this.markovDict[current]) this.markovDict[current] = [];
-            this.markovDict[current].push(next);
-          }
-        }
-
-        generateMarkov(startWord) {
-          if (!this.markovDict[startWord] || this.markovDict[startWord].length === 0) return null;
-          let current = startWord;
-          let result = [current];
-          for (let i = 0; i < 3; i++) {
-            const nextCandidates = this.markovDict[current];
-            if (!nextCandidates || nextCandidates.length === 0) break;
-            current = nextCandidates[Math.floor(Math.random() * nextCandidates.length)];
-            result.push(current);
-          }
-          return result.join('');
-        }
-
-        reply(input, lang = 'ja') {
-          this.state.turnCount++;
-          const activeLang = (lang === 'en') ? 'en' : 'ja';
-          const tokens = this.tokenize(input);
-          const keywords = this.extractKeywords(tokens);
-          this.trainMarkov(tokens);
-
-          // 1. パターンマッチ判定
-          const patterns = this.patternDict[activeLang] || this.patternDict.ja;
-          for (const item of patterns) {
-            if (item.pattern.test(input)) {
-              const idx = Math.floor(Math.random() * item.responses.length);
-              return item.responses[idx];
-            }
-          }
-
-          // トピックキーワードの更新
-          if (keywords.length > 0) {
-            this.state.userTopic = keywords[Math.floor(Math.random() * keywords.length)];
-          }
-
-          // 2. 抽出トピックを使った返答 (確率 60%)
-          if (this.state.userTopic && Math.random() < 0.6) {
-            const tplList = this.templates[activeLang] || this.templates.ja;
-            const tpl = tplList[Math.floor(Math.random() * tplList.length)];
-            return tpl.replace("{topic}", this.state.userTopic);
-          }
-
-          // 3. マルコフ連鎖による簡易生成
-          if (activeLang === 'ja' && keywords.length > 0) {
-            const markovText = this.generateMarkov(keywords[0]);
-            if (markovText) return `${markovText}…って感じかな？`;
-          }
-
-          // 4. バリエーション豊かな相づち
-          const fillers = this.fillerResponses[activeLang] || this.fillerResponses.ja;
-          return fillers[Math.floor(Math.random() * fillers.length)];
-        }
-      }
-
-      // 言語別 設定定義
-      const langConfig = {
-        ja: {
-          recognitionLang: 'ja-JP',
-          scDefaultText: "ありがとうございます！",
-          scKeywords: ["スパチャ", "スーパーチャット", "ありがとうございまーす", "ありがとうございます", "感謝"],
-          cutInRules: [
-            { keywords: ["ここだ"], text: "ここだ！" },
-            { keywords: ["ここで決める", "これで決める"], text: "これで決める！" }
-          ]
-        },
-        en: {
-          recognitionLang: 'en-US',
-          scDefaultText: "THANK YOU SO MUCH!",
-          scKeywords: ["super chat", "superchat", "thank you", "thanks for the support", "thanks"],
-          cutInRules: [
-            { keywords: ["this is it", "here goes", "now"], text: "THIS IS IT!" },
-            { keywords: ["finish this", "let's do this", "take this"], text: "LET'S DO THIS!" }
-          ]
-        }
-      };
-
-      // 音声・効果音の設定
-      const sePlayer = new Audio("剣を抜く.mp3");
-      sePlayer.volume = 0.5;
+      // =========================================================
+              // 音声・効果音の設定
+              // =========================================================
+              const sePlayer = new Audio("剣を抜く.mp3");
+              sePlayer.volume = 0.5;
 
       function playSuperChatSynthSE() {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContext) return;
+                  const AudioContext = window.AudioContext || window.webkitAudioContext;
+                  if (!AudioContext) return;
 
-        const ctx = new AudioContext();
-        if (ctx.state === 'suspended') {
-          ctx.resume();
-        }
+                  const ctx = new AudioContext();
 
-        const now = ctx.currentTime;
-        const masterGain = ctx.createGain();
-        masterGain.gain.setValueAtTime(1.6, now);
-        masterGain.connect(ctx.destination);
+                  // ▼ 【追加】ブラウザの制限で停止しているAudioContextを強制的に再開させる
+                  if (ctx.state === 'suspended') {
+                      ctx.resume();
+                  }
 
-        // アルペジオベル
-        const bellFreqs = [523.25, 659.25, 783.99, 1046.5];
-        bellFreqs.forEach((freq, index) => {
-          const timeOffset = index * 0.05;
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
+                  const now = ctx.currentTime;
 
-          osc.type = index % 2 === 0 ? 'sine' : 'triangle';
-          osc.frequency.setValueAtTime(freq, now + timeOffset);
-          osc.frequency.exponentialRampToValueAtTime(freq * 1.2, now + timeOffset + 0.5);
+                  const masterGain = ctx.createGain();
+                  masterGain.gain.setValueAtTime(1.6, now);
+                  masterGain.connect(ctx.destination);
 
-          gain.gain.setValueAtTime(0.35, now + timeOffset);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + timeOffset + 0.5);
+                  // 音色1：アルペジオベル
+                  const bellFreqs = [523.25, 659.25, 783.99, 1046.5];
+                  bellFreqs.forEach((freq, index) => {
+                      const timeOffset = index * 0.05;
+                      const osc = ctx.createOscillator();
+                      const gain = ctx.createGain();
 
-          osc.connect(gain);
-          gain.connect(masterGain);
+                      osc.type = index % 2 === 0 ? 'sine' : 'triangle';
+                      osc.frequency.setValueAtTime(freq, now + timeOffset);
+                      osc.frequency.exponentialRampToValueAtTime(freq * 1.2, now + timeOffset + 0.5);
 
-          osc.start(now + timeOffset);
-          osc.stop(now + timeOffset + 0.55);
-        });
+                      gain.gain.setValueAtTime(0.35, now + timeOffset);
+                      gain.gain.exponentialRampToValueAtTime(0.001, now + timeOffset + 0.5);
 
-        // クラッカー破裂音
-        const bufferSize = ctx.sampleRate * 0.4;
-        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; }
+                      osc.connect(gain);
+                      gain.connect(masterGain);
 
-        const crackerNoise = ctx.createBufferSource();
-        crackerNoise.buffer = buffer;
+                      osc.start(now + timeOffset);
+                      osc.stop(now + timeOffset + 0.55);
+                  });
 
-        const crackerFilter = ctx.createBiquadFilter();
-        crackerFilter.type = 'bandpass';
-        crackerFilter.frequency.setValueAtTime(1800, now);
+                  // 音色2：クラッカー破裂音
+                  const bufferSize = ctx.sampleRate * 0.4;
+                  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                  const data = buffer.getChannelData(0);
+                  for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; }
 
-        const crackerGain = ctx.createGain();
-        crackerGain.gain.setValueAtTime(0.8, now);
-        crackerGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+                  const crackerNoise = ctx.createBufferSource();
+                  crackerNoise.buffer = buffer;
 
-        crackerNoise.connect(crackerFilter);
-        crackerFilter.connect(crackerGain);
-        crackerGain.connect(masterGain);
+                  const crackerFilter = ctx.createBiquadFilter();
+                  crackerFilter.type = 'bandpass';
+                  crackerFilter.frequency.setValueAtTime(1800, now);
 
-        const crackerThump = ctx.createOscillator();
-        const thumpGain = ctx.createGain();
-        crackerThump.type = 'triangle';
-        crackerThump.frequency.setValueAtTime(250, now);
-        crackerThump.frequency.exponentialRampToValueAtTime(40, now + 0.1);
-        thumpGain.gain.setValueAtTime(0.6, now);
-        thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+                  const crackerGain = ctx.createGain();
+                  crackerGain.gain.setValueAtTime(0.8, now);
+                  crackerGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
 
-        crackerThump.connect(thumpGain);
-        thumpGain.connect(masterGain);
+                  crackerNoise.connect(crackerFilter);
+                  crackerFilter.connect(crackerGain);
+                  crackerGain.connect(masterGain);
 
-        crackerNoise.start(now);
-        crackerThump.start(now);
-        crackerNoise.stop(now + 0.4);
-        crackerThump.stop(now + 0.4);
+                  const crackerThump = ctx.createOscillator();
+                  const thumpGain = ctx.createGain();
+                  crackerThump.type = 'triangle';
+                  crackerThump.frequency.setValueAtTime(250, now);
+                  crackerThump.frequency.exponentialRampToValueAtTime(40, now + 0.1);
+                  thumpGain.gain.setValueAtTime(0.6, now);
+                  thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
 
-        // シンバル
-        const cymbalFreqs = [312, 520, 630, 810, 1150, 1400];
-        cymbalFreqs.forEach(f => {
-          const osc = ctx.createOscillator();
-          osc.type = 'square';
-          osc.frequency.setValueAtTime(f, now);
+                  crackerThump.connect(thumpGain);
+                  thumpGain.connect(masterGain);
 
-          const filter = ctx.createBiquadFilter();
-          filter.type = 'highpass';
-          filter.frequency.setValueAtTime(7500, now);
+                  crackerNoise.start(now);
+                  crackerThump.start(now);
+                  crackerNoise.stop(now + 0.4);
+                  crackerThump.stop(now + 0.4);
 
-          const cymbalGain = ctx.createGain();
-          cymbalGain.gain.setValueAtTime(0.25, now);
-          cymbalGain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+                  // 音色3：シンバル
+                  const cymbalFreqs = [312, 520, 630, 810, 1150, 1400];
+                  cymbalFreqs.forEach(f => {
+                      const osc = ctx.createOscillator();
+                      osc.type = 'square';
+                      osc.frequency.setValueAtTime(f, now);
 
-          osc.connect(filter);
-          filter.connect(cymbalGain);
-          cymbalGain.connect(masterGain);
+                      const filter = ctx.createBiquadFilter();
+                      filter.type = 'highpass';
+                      filter.frequency.setValueAtTime(7500, now);
 
-          osc.start(now);
-          osc.stop(now + 1.3);
-        });
+                      const cymbalGain = ctx.createGain();
+                      cymbalGain.gain.setValueAtTime(0.25, now);
+                      cymbalGain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
 
-        const cymbalNoise = ctx.createBufferSource();
-        cymbalNoise.buffer = buffer;
-        const cymbalNoiseFilter = ctx.createBiquadFilter();
-        cymbalNoiseFilter.type = 'highpass';
-        cymbalNoiseFilter.frequency.setValueAtTime(8500, now);
+                      osc.connect(filter);
+                      filter.connect(cymbalGain);
+                      cymbalGain.connect(masterGain);
 
-        const cymbalNoiseGain = ctx.createGain();
-        cymbalNoiseGain.gain.setValueAtTime(0.35, now);
-        cymbalNoiseGain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+                      osc.start(now);
+                      osc.stop(now + 1.3);
+                  });
 
-        cymbalNoise.connect(cymbalNoiseFilter);
-        cymbalNoiseFilter.connect(cymbalNoiseGain);
-        cymbalNoiseGain.connect(masterGain);
+                  const cymbalNoise = ctx.createBufferSource();
+                  cymbalNoise.buffer = buffer;
+                  const cymbalNoiseFilter = ctx.createBiquadFilter();
+                  cymbalNoiseFilter.type = 'highpass';
+                  cymbalNoiseFilter.frequency.setValueAtTime(8500, now);
 
-        cymbalNoise.start(now);
-        cymbalNoise.stop(now + 1.1);
-      }
+                  const cymbalNoiseGain = ctx.createGain();
+                  cymbalNoiseGain.gain.setValueAtTime(0.35, now);
+                  cymbalNoiseGain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
 
-      // 20秒無言検知・自動トーク機能
-      let silenceTimer = null;
-      const SILENCE_LIMIT = 20 * 1000;
+                  cymbalNoise.connect(cymbalNoiseFilter);
+                  cymbalNoiseFilter.connect(cymbalNoiseGain);
+                  cymbalNoiseGain.connect(masterGain);
 
-      function resetSilenceTimer() {
-        if (silenceTimer) clearTimeout(silenceTimer);
-        silenceTimer = setTimeout(triggerSilenceTalk, SILENCE_LIMIT);
-      }
+                  cymbalNoise.start(now);
+                  cymbalNoise.stop(now + 1.1);
+              }
 
-      function stopSilenceTimer() {
-        if (silenceTimer) clearTimeout(silenceTimer);
-      }
+              // =========================================================
+              // 20秒無言検知・自動トーク機能
+              // =========================================================
+              let silenceTimer = null;
+              const SILENCE_LIMIT = 20 * 1000; // 20秒
 
-      function triggerSilenceTalk() {
-        if (isSpeaking) {
-          resetSilenceTimer();
-          return;
-        }
+              function resetSilenceTimer() {
+                  if (silenceTimer) clearTimeout(silenceTimer);
+                  silenceTimer = setTimeout(triggerSilenceTalk, SILENCE_LIMIT);
+              }
 
-        if (typeof silencePhrases !== 'undefined' && silencePhrases[currentLang] && silencePhrases[currentLang].length > 0) {
-          const phrases = silencePhrases[currentLang];
-          const randomIndex = Math.floor(Math.random() * phrases.length);
-          const selectedText = phrases[randomIndex];
-          runAssistantVoice(selectedText, currentLang);
-        } else {
-          const fallbackText = getNextText();
-          if (fallbackText) runAssistantVoice(fallbackText, currentLang);
-        }
-      }
+              function stopSilenceTimer() {
+                  if (silenceTimer) clearTimeout(silenceTimer);
+              }
 
-      // カットイン表示機能
+              function triggerSilenceTalk() {
+                  if (isSpeaking) {
+                      resetSilenceTimer();
+                      return;
+                  }
+
+                  if (typeof silencePhrases !== 'undefined' && silencePhrases[currentLang] && silencePhrases[currentLang].length > 0) {
+                      const phrases = silencePhrases[currentLang];
+                      const randomIndex = Math.floor(Math.random() * phrases.length);
+                      const selectedText = phrases[randomIndex];
+                      runAssistantVoice(selectedText, currentLang);
+                  }
+              }
+
+              // =========================================================
+              // カットイン ＆ スパチャアニメーション ＆ 紙吹雪機能
+              // =========================================================
+
+              // カットイン表示機能
       function executePhraseCutIn(text) {
-        const cutInBox = document.getElementById('phrase-cutin-box');
-        const cutInText = document.getElementById('phrase-text-content');
+          const cutInBox = document.getElementById('phrase-cutin-box');
+          const cutInText = document.getElementById('phrase-text-content');
 
-        cutInText.innerText = text;
+          cutInText.innerText = text;
 
-        cutInBox.classList.remove('slide-in', 'slide-out');
-        void cutInBox.offsetWidth;
+          cutInBox.classList.remove('slide-in', 'slide-out');
+          void cutInBox.offsetWidth;
 
-        cutInBox.classList.add('slide-in');
+          cutInBox.classList.add('slide-in');
 
-        setTimeout(() => {
-          try {
-            sePlayer.currentTime = 0;
-            sePlayer.play();
-          } catch (audioErr) { console.error(audioErr); }
-        }, 300);
-
-        setTimeout(() => {
-          cutInBox.classList.remove('slide-in');
-          cutInBox.classList.add('slide-out');
+          // ▼ 【追加】カットイン表示のタイミングでSEを鳴らす
+          setTimeout(() => {
+              try {
+                  sePlayer.currentTime = 0;
+                  sePlayer.play();
+              } catch (audioErr) { console.error(audioErr); }
+          }, 300);
 
           setTimeout(() => {
-            cutInBox.classList.remove('slide-out');
-          }, 300);
-        }, 3000);
+              cutInBox.classList.remove('slide-in');
+              cutInBox.classList.add('slide-out');
+
+              setTimeout(() => {
+                  cutInBox.classList.remove('slide-out');
+              }, 300);
+          }, 3000);
       }
 
-      // スパチャポップアップ表示機能
+              // スパチャポップアップ表示機能
       function triggerSuperChatEffects() {
-        const scBox = document.getElementById('sc-popup-box');
-        scBox.classList.add('show');
+          const scBox = document.getElementById('sc-popup-box');
+          scBox.classList.add('show');
 
-        fireConfetti();
+          fireConfetti(); // 紙吹雪発射！
 
-        setTimeout(() => {
-          playSuperChatSynthSE();
-        }, 50);
+          // ▼ 【追加】スパチャの合成音（SE）を鳴らす
+          setTimeout(() => {
+              playSuperChatSynthSE();
+          }, 50);
 
-        setTimeout(() => {
-          scBox.classList.remove('show');
-        }, 4000);
+          setTimeout(() => {
+              scBox.classList.remove('show');
+          }, 4000);
       }
 
-      // 紙吹雪パーティクルシステム
-      const canvas = document.getElementById('canvas-confetti');
-      const ctx = canvas.getContext('2d');
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+              // 紙吹雪パーティクルシステム
+              const canvas = document.getElementById('canvas-confetti');
+              const ctx = canvas.getContext('2d');
+              canvas.width = window.innerWidth;
+              canvas.height = window.innerHeight;
 
-      window.addEventListener('resize', () => {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-      });
+              window.addEventListener('resize', () => {
+                  canvas.width = window.innerWidth;
+                  canvas.height = window.innerHeight;
+              });
 
-      let particles = [];
-      let animatingConfetti = false;
+              let particles = [];
+              let animatingConfetti = false;
 
-      function fireConfetti() {
-        const colors = ['#ff4e50', '#f9d423', '#00f3ff', '#ffffff', '#ff00ff'];
-        particles = [];
-        for(let i=0; i<120; i++) {
-          particles.push({
-            x: canvas.width / 2,
-            y: canvas.height / 2 + 50,
-            r: Math.random() * 6 + 4,
-            dx: Math.random() * 30 - 15,
-            dy: Math.random() * -20 - 10,
-            color: colors[Math.floor(Math.random() * colors.length)],
-            tilt: Math.floor(Math.random() * 10) - 10,
-            tiltAngle: 0,
-            tiltAngleInc: (Math.random() * 0.07) + 0.05
-          });
-        }
-        if(!animatingConfetti) animateConfetti();
-      }
+              function fireConfetti() {
+                  const colors = ['#ff4e50', '#f9d423', '#00f3ff', '#ffffff', '#ff00ff'];
+                  particles = [];
+                  for(let i=0; i<120; i++) {
+                      particles.push({
+                          x: canvas.width / 2,
+                          y: canvas.height / 2 + 50,
+                          r: Math.random() * 6 + 4,
+                          dx: Math.random() * 30 - 15,
+                          dy: Math.random() * -20 - 10,
+                          color: colors[Math.floor(Math.random() * colors.length)],
+                          tilt: Math.floor(Math.random() * 10) - 10,
+                          tiltAngle: 0,
+                          tiltAngleInc: (Math.random() * 0.07) + 0.05
+                      });
+                  }
+                  if(!animatingConfetti) animateConfetti();
+              }
 
-      function animateConfetti() {
-        animatingConfetti = true;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+              function animateConfetti() {
+                  animatingConfetti = true;
+                  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        particles.forEach((p, index) => {
-          p.tiltAngle += p.tiltAngleInc;
-          p.y += (Math.cos(p.tiltAngle) + 1 + p.r / 2) / 2;
-          p.x += Math.sin(p.tiltAngle) * 2;
-          p.dy += 0.4;
-          p.x += p.dx;
-          p.y += p.dy;
+                  particles.forEach((p, index) => {
+                      p.tiltAngle += p.tiltAngleInc;
+                      p.y += (Math.cos(p.tiltAngle) + 1 + p.r / 2) / 2;
+                      p.x += Math.sin(p.tiltAngle) * 2;
+                      p.dy += 0.4; // 重力
+                      p.x += p.dx;
+                      p.y += p.dy;
 
-          ctx.beginPath();
-          ctx.lineWidth = p.r;
-          ctx.strokeStyle = p.color;
-          ctx.moveTo(p.x + p.tilt + p.r, p.y);
-          ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r);
-          ctx.stroke();
+                      ctx.beginPath();
+                      ctx.lineWidth = p.r;
+                      ctx.strokeStyle = p.color;
+                      ctx.moveTo(p.x + p.tilt + p.r, p.y);
+                      ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r);
+                      ctx.stroke();
 
-          if(p.y > canvas.height) {
-            particles.splice(index, 1);
-          }
-        });
+                      // 画面外に出たパーティクルを削除
+                      if(p.y > canvas.height) {
+                          particles.splice(index, 1);
+                      }
+                  });
 
-        if(particles.length > 0) {
-          requestAnimationFrame(animateConfetti);
-        } else {
-          animatingConfetti = false;
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
-      }
+                  if(particles.length > 0) {
+                      requestAnimationFrame(animateConfetti);
+                  } else {
+                      animatingConfetti = false;
+                      ctx.clearRect(0, 0, canvas.width, canvas.height);
+                  }
+              }
 
-      // AI Assistant "Genis" (音声読み上げ & アバター制御)
-      let isSpeaking = false;
-      let currentLang = 'ja';
-      const synthesizer = window.speechSynthesis;
 
-      const avatarOrb = document.getElementById('avatar-orb');
-      const aiStatusMsg = document.getElementById('ai-status-msg');
-      const aiSubtitleBox = document.getElementById('ai-subtitle-box');
-      const toggleBtn = document.getElementById('toggle-avatar-btn');
-      const toggleLangBtn = document.getElementById('toggle-lang-btn');
-      const avatarFrame = document.getElementById('avatar-frame');
+              // =========================================================
+              // AI Assistant "Genis" (音声読み上げ & アバター制御)
+              // =========================================================
+              let isSpeaking = false;
+              let currentLang = 'ja';
+              const synthesizer = window.speechSynthesis;
 
-      let orbPulseInterval = null;
+              const avatarOrb = document.getElementById('avatar-orb');
+              const aiStatusMsg = document.getElementById('ai-status-msg');
+              const aiSubtitleBox = document.getElementById('ai-subtitle-box');
+              const toggleBtn = document.getElementById('toggle-avatar-btn');
+              const toggleLangBtn = document.getElementById('toggle-lang-btn');
+              const avatarFrame = document.getElementById('avatar-frame');
 
-      speechSynthesis.getVoices();
+              let orbPulseInterval = null;
 
-      const oncePhrases = {
-        ja: [
-          "この1週間の中で、一番「美味しかったなぁ」って思った食べ物は何ですか？",
-          "ここ1ヶ月の間で、買って良かった便利グッズやアイテムって何かありましたか？",
-          "ここ最近で「これ美味しくてハマりそう！」ってなったお菓子やアイス、ありましたか？",
-          "この1週間で、思わず「衝動買い」しちゃったものって何かありますか？",
-          "最近コンビニやスーパーで見かけて、つい買っちゃった新商品ってありますか？",
-          "この1週間で、一番「フフッ」って笑っちゃった出来事って何でしたか？",
-          "最近おうちの中や自分の部屋で、新しくレイアウトを変えた場所ってありますか？",
-          "この1週間の中で、一番テンションが上がった瞬間ってどんな時でしたか？",
-          "ここ1ヶ月の間でハマった動画やチャンネルって、何かありますか？",
-          "この1週間で「この曲いいな」ってリピート再生した音楽はありますか？",
-          "最近読んだ本や漫画で、続きが気になっている作品ってありますか？",
-          "この1週間で、ぐっすり気持ちよく眠れた日ってありましたか？",
-          "最近、心がフッと軽くなった出来事って何かありましたか？",
-          "最近食べたアイスで、おすすめの味があったらぜひ知りたいです。"
-        ],
-        en: [
-          "What was the best food you ate this past week?",
-          "Have you bought anything really useful or fun in the last month?",
-          "Is there any snack or drink you've been obsessed with lately?",
-          "Did anything make you smile or laugh out loud this past week?",
-          "Have you discovered any cool videos or YouTube channels recently?",
-          "What song have you been playing on repeat this week?",
-          "Did you have a chance to go anywhere fun or scenic this month?",
-          "Was there a moment this week when you felt super energized or excited?",
-          "Have you tried playing any new games or apps lately?",
-          "What is something small that made your day a little brighter recently?"
-        ]
-      };
+              speechSynthesis.getVoices();
 
-      const loopPhrases = {
-        ja: [
-          "いい雰囲気ですね。このまったりした空気、とても落ち着きます。",
-          "画面の向こうの皆さんも、お茶でも飲みながらのんびり見ていってくださいね。",
-          "今日もマイペースに楽しんでいきましょう。",
-          "ちょっと一息つきませんか？冷たい飲み物でも一口どうぞ。",
-          "無理せず、自分のペースで。楽しむことが一番ですからね。",
-          "ふと気になったんですが、皆さんは今、どんな体勢で見てくれていますか？",
-          "皆さんの好きな飲み物って何ですか？手元に何か用意されていますか？",
-          "今日もお仕事や学校、家事など、皆さん本当にお疲れ様でした。",
-          "画面の前のあなた、まばたきを忘れていませんか？ぎゅっと閉じて目を休めてくださいね。",
-          "焦らず、一歩ずつ進んでいきましょう。",
-          "失敗は成功のもと。次のチャレンジが楽しみですね。",
-          "少しストレッチでもしてみませんか？背筋を伸ばすと気持ちいいですよ。"
-        ],
-        en: [
-          "I really love this relaxed atmosphere. It's so cozy here.",
-          "Feel free to grab a drink and get comfortable, everyone!",
-          "Let me know in the chat if you're having a good day today.",
-          "Don't forget to take a short break and stretch a little!",
-          "How is everyone doing today? Are you sitting comfortably?",
-          "Taking things step by step is always the best way.",
-          "Thank you all for spending your time here with us today.",
-          "Remember to blink and give your eyes a quick rest!",
-          "Every small step counts. You're doing awesome!",
-          "Mistakes are just part of the fun. Let me know what you think!"
-        ]
-      };
-
-      const currentLoopDecks = { ja: [], en: [] };
-      const ONCE_PHRASE_CHANCE = 0.3;
-
-      function shuffleArray(array) {
-        const shuffled = [...array];
-        for (let i = shuffled.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-        return shuffled;
-      }
-
-      function getNextText() {
-        const lang = currentLang;
-        const hasOnce = oncePhrases[lang] && oncePhrases[lang].length > 0;
-        const rollChance = Math.random() < ONCE_PHRASE_CHANCE;
-
-        if (hasOnce && rollChance) {
-          const index = Math.floor(Math.random() * oncePhrases[lang].length);
-          const selectedText = oncePhrases[lang][index];
-          oncePhrases[lang].splice(index, 1);
-          return selectedText;
-        }
-
-        if (currentLoopDecks[lang].length === 0) {
-          currentLoopDecks[lang] = shuffleArray(loopPhrases[lang]);
-        }
-
-        return currentLoopDecks[lang].pop();
-      }
-
-      toggleLangBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (currentLang === 'ja') {
-          currentLang = 'en';
-          toggleLangBtn.innerText = "LANG: EN";
-        } else {
-          currentLang = 'ja';
-          toggleLangBtn.innerText = "LANG: JA";
-        }
-        document.getElementById('sc-text-content').innerText = langConfig[currentLang].scDefaultText;
-        updateSpeechRecognitionLang();
-      });
-
-      toggleBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const isHidden = avatarFrame.classList.toggle('element-hide');
-        aiStatusMsg.classList.toggle('element-hide');
-        toggleBtn.innerText = isHidden ? "AVATAR SHOW" : "AVATAR HIDE";
-      });
-
-      function updateAvatarState() {
-        clearInterval(orbPulseInterval);
-        if (isSpeaking) {
-          let isHighGlow = false;
-          orbPulseInterval = setInterval(() => {
-            isHighGlow = !isHighGlow;
-            if (isHighGlow) {
-              avatarOrb.classList.add('speaking-pulse');
-            } else {
-              avatarOrb.classList.remove('speaking-pulse');
-            }
-          }, 160);
-        } else {
-          avatarOrb.classList.remove('speaking-pulse');
-        }
-      }
-
-      function splitTextForGenis(text, lang) {
-        const chunks = [];
-        const isEnglish = (lang === 'en');
-        const maxLength = isEnglish ? 45 : 20;
-
-        let current = "";
-        for (let i = 0; i < text.length; i++) {
-          current += text[i];
-          const char = text[i];
-          const isBreakChar = (char === "、" || char === "。" || char === "！" || char === "？" || char === "," || char === "." || char === "!" || char === "?");
-
-          if (current.length >= maxLength || isBreakChar) {
-            chunks.push(current.trim());
-            current = "";
-          }
-        }
-        if (current) chunks.push(current.trim());
-        return chunks;
-      }
-
-      function runAssistantVoice(text, lang = currentLang) {
-        if (!synthesizer) return;
-        synthesizer.cancel();
-
-        isSpeaking = true;
-        aiStatusMsg.innerText = "SPEAKING";
-        updateAvatarState();
-
-        const chunks = splitTextForGenis(text, lang);
-        let chunkIndex = 0;
-
-        function speakNextChunk() {
-          if (chunkIndex >= chunks.length) {
-            isSpeaking = false;
-            aiStatusMsg.innerText = "STANDBY";
-            aiSubtitleBox.classList.remove('active');
-            updateAvatarState();
-            resetSilenceTimer();
-            return;
-          }
-
-          const currentChunk = chunks[chunkIndex];
-          aiSubtitleBox.innerText = currentChunk;
-          aiSubtitleBox.classList.add('active');
-
-          const utterance = new SpeechSynthesisUtterance(currentChunk);
-          utterance.lang = langConfig[lang].recognitionLang;
-
-          const voices = synthesizer.getVoices();
-          const voice = voices.find(v => v.lang.startsWith(lang));
-          if (voice) utterance.voice = voice;
-
-          utterance.onend = () => {
-            chunkIndex++;
-            speakNextChunk();
-          };
-
-          utterance.onerror = () => {
-            chunkIndex++;
-            speakNextChunk();
-          };
-
-          synthesizer.speak(utterance);
-        }
-
-        speakNextChunk();
-      }
-
-      // Web Speech API 音声認識機能の初期化
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      let recognition = null;
-      const nativeBot = new NativeBot();
-
-      function updateSpeechRecognitionLang() {
-        if (recognition) {
-          recognition.lang = langConfig[currentLang].recognitionLang;
-        }
-      }
-
-      if (SpeechRecognition) {
-        recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = false;
-        updateSpeechRecognitionLang();
-
-        recognition.onresult = (event) => {
-          resetSilenceTimer();
-          const transcript = event.results[event.results.length - 1][0].transcript.trim();
-          if (!transcript) return;
-
-          const lowerText = transcript.toLowerCase();
-          const config = langConfig[currentLang];
-
-          // 1. スパチャトリガー判定
-          const isSC = config.scKeywords.some(kw => lowerText.includes(kw.toLowerCase()));
-          if (isSC) {
-            triggerSuperChatEffects();
-          }
-
-          // 2. カットイントリガー判定
-          for (const rule of config.cutInRules) {
-            if (rule.keywords.some(kw => lowerText.includes(kw.toLowerCase()))) {
-              executePhraseCutIn(rule.text);
-              break;
-            }
-          }
-
-          // 3. ボットの返答生成と音声出力
-          const botReply = nativeBot.reply(transcript, currentLang);
-          runAssistantVoice(botReply, currentLang);
+        const oncePhrases = {
+            ja: [
+                "この1週間の中で、一番「美味しかったなぁ」って思った食べ物は何ですか？",
+                "ここ1ヶ月の間で、買って良かった便利グッズやアイテムって何かありましたか？",
+                "ここ最近で「これ美味しくてハマりそう！」ってなったお菓子やアイス、ありましたか？",
+                "この1週間で、思わず「衝動買い」しちゃったものって何かありますか？",
+                "最近コンビニやスーパーで見かけて、つい買っちゃった新商品ってありますか？",
+                "この1週間で、一番「フフッ」って笑っちゃった出来事って何でしたか？",
+                "最近おうちの中や自分の部屋で、新しくレイアウトを変えた場所ってありますか？",
+                "この1週間の中で、一番テンションが上がった瞬間ってどんな時でしたか？",
+                "ここ1ヶ月の間でハマった動画やチャンネルって、何かありますか？",
+                "この1週間で「この曲いいな」ってリピート再生した音楽はありますか？",
+                "最近読んだ本や漫画で、続きが気になっている作品ってありますか？",
+                "この1週間で、ぐっすり気持ちよく眠れた日ってありましたか？",
+                "最近、心がフッと軽くなった出来事って何かありましたか？",
+                "最近食べたアイスで、おすすめの味があったらぜひ知りたいです。"
+            ],
+            en: [
+                "What was the best food you ate this past week?",
+                "Have you bought anything really useful or fun in the last month?",
+                "Is there any snack or drink you've been obsessed with lately?",
+                "Did anything make you smile or laugh out loud this past week?",
+                "Have you discovered any cool videos or YouTube channels recently?",
+                "What song have you been playing on repeat this week?",
+                "Did you have a chance to go anywhere fun or scenic this month?",
+                "Was there a moment this week when you felt super energized or excited?",
+                "Have you tried playing any new games or apps lately?",
+                "What is something small that made your day a little brighter recently?"
+            ]
         };
 
-        recognition.onend = () => {
-          try { recognition.start(); } catch (e) {}
+        const loopPhrases = {
+            ja: [
+                "いい雰囲気ですね。このまったりした空気、とても落ち着きます。",
+                "画面の向こうの皆さんも、お茶でも飲みながらのんびり見ていってくださいね。",
+                "今日もマイペースに楽しんでいきましょう。",
+                "ちょっと一息つきませんか？冷たい飲み物でも一口どうぞ。",
+                "無理せず、自分のペースで。楽しむことが一番ですからね。",
+                "ふと気になったんですが、皆さんは今、どんな体勢で見てくれていますか？",
+                "皆さんの好きな飲み物って何ですか？手元に何か用意されていますか？",
+                "今日もお仕事や学校、家事など、皆さん本当にお疲れ様でした。",
+                "画面の前のあなた、まばたきを忘れていませんか？ぎゅっと閉じて目を休めてくださいね。",
+                "焦らず、一歩ずつ進んでいきましょう。",
+                "失敗は成功のもと。次のチャレンジが楽しみですね。",
+                "少しストレッチでもしてみませんか？背筋を伸ばすと気持ちいいですよ。"
+            ],
+            en: [
+                "I really love this relaxed atmosphere. It's so cozy here.",
+                "Feel free to grab a drink and get comfortable, everyone!",
+                "Let me know in the chat if you're having a good day today.",
+                "Don't forget to take a short break and stretch a little!",
+                "How is everyone doing today? Are you sitting comfortably?",
+                "Taking things step by step is always the best way.",
+                "Thank you all for spending your time here with us today.",
+                "Remember to blink and give your eyes a quick rest!",
+                "Every small step counts. You're doing awesome!",
+                "Mistakes are just part of the fun. Let me know what you think!"
+            ]
         };
 
-        recognition.onerror = (e) => {
-          console.warn("Speech Recognition Error:", e);
-        };
-      }
+              const currentLoopDecks = { ja: [], en: [] };
+              const ONCE_PHRASE_CHANCE = 0.3;
 
-      // ユーザー操作時に音声認識と無言タイマーを開始
-      window.addEventListener('click', () => {
-        if (recognition) {
-          try { recognition.start(); } catch (e) {}
-        }
-        resetSilenceTimer();
-      }, { once: true });
+              function shuffleArray(array) {
+                  const shuffled = [...array];
+                  for (let i = shuffled.length - 1; i > 0; i--) {
+                      const j = Math.floor(Math.random() * (i + 1));
+                      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                  }
+                  return shuffled;
+              }
 
-      resetSilenceTimer();
+              function getNextText() {
+                  const lang = currentLang;
+                  const hasOnce = oncePhrases[lang] && oncePhrases[lang].length > 0;
+                  const rollChance = Math.random() < ONCE_PHRASE_CHANCE;
+
+                  if (hasOnce && rollChance) {
+                      const index = Math.floor(Math.random() * oncePhrases[lang].length);
+                      const selectedText = oncePhrases[lang][index];
+                      oncePhrases[lang].splice(index, 1);
+                      return selectedText;
+                  }
+
+                  if (currentLoopDecks[lang].length === 0) {
+                      currentLoopDecks[lang] = shuffleArray(loopPhrases[lang]);
+                  }
+
+                  return currentLoopDecks[lang].pop();
+              }
+
+              toggleLangBtn.addEventListener('click', (e) => {
+                  e.stopPropagation();
+                  if (currentLang === 'ja') {
+                      currentLang = 'en';
+                      toggleLangBtn.innerText = "LANG: EN";
+                  } else {
+                      currentLang = 'ja';
+                      toggleLangBtn.innerText = "LANG: JA";
+                  }
+                  document.getElementById('sc-text-content').innerText = langConfig[currentLang].scDefaultText;
+                  updateSpeechRecognitionLang();
+              });
+
+              toggleBtn.addEventListener('click', (e) => {
+                  e.stopPropagation();
+                  const isHidden = avatarFrame.classList.toggle('element-hide');
+                  aiStatusMsg.classList.toggle('element-hide');
+                  toggleBtn.innerText = isHidden ? "AVATAR SHOW" : "AVATAR HIDE";
+              });
+
+              function updateAvatarState() {
+                  clearInterval(orbPulseInterval);
+                  if (isSpeaking) {
+                      let isHighGlow = false;
+                      orbPulseInterval = setInterval(() => {
+                          isHighGlow = !isHighGlow;
+                          if (isHighGlow) {
+                              avatarOrb.classList.add('speaking-pulse');
+                          } else {
+                              avatarOrb.classList.remove('speaking-pulse');
+                          }
+                      }, 160);
+                  } else {
+                      avatarOrb.classList.remove('speaking-pulse');
+                  }
+              }
+
+              function splitTextForGenis(text, lang) {
+                  const chunks = [];
+                  const isEnglish = (lang === 'en');
+                  const maxLength = isEnglish ? 45 : 20;
+
+                  let current = "";
+                  for (let i = 0; i < text.length; i++) {
+                      current += text[i];
+                      const char = text[i];
+                      const isBreakChar = (char === "、" || char === "。" || char === "！" || char === "？" || char === "," || char === "." || char === "!" || char === "?");
+
+                      if (current.length >= maxLength || isBreakChar) {
+                          chunks.push(current.trim());
+                          current = "";
+                      }
+                  }
+                  if (current) chunks.push(current.trim());
+                  return chunks.filter(c => c.length > 0);
+              }
+
+              function getVoiceForLang(langCode) {
+                  const voices = speechSynthesis.getVoices();
+                  if (langCode === 'en') {
+                      return voices.find(v => v.lang.startsWith('en') && (
+                          v.name.includes('Google') || v.name.includes('Samantha')
+                      )) || voices.find(v => v.lang.startsWith('en'));
+                  } else {
+                      return voices.find(v => v.lang.startsWith('ja') && (
+                          v.name.includes('Google') || v.name.includes('Ayumi') || v.name.includes('Haruka') || v.name.includes('Nanami')
+                      )) || voices.find(v => v.lang.startsWith('ja'));
+                  }
+              }
+
+              function runAssistantVoice(fullText, lang) {
+                  if (synthesizer.speaking) synthesizer.cancel();
+
+                  const textForSpeech = fullText.replace(/（[^）]*）|\([^)]*\)/g, '').trim();
+
+                  const subtitleChunks = splitTextForGenis(fullText, lang);
+                  const speechChunks = splitTextForGenis(textForSpeech, lang);
+
+                  let currentChunkIndex = 0;
+
+                  function playNextChunk() {
+                      if (currentChunkIndex >= subtitleChunks.length && currentChunkIndex >= speechChunks.length) {
+                          isSpeaking = false;
+                          resetSilenceTimer();
+                          updateAvatarState();
+                          aiStatusMsg.innerText = "STANDBY";
+                          aiSubtitleBox.classList.remove('active');
+                          return;
+                      }
+
+                      if (currentChunkIndex < subtitleChunks.length) {
+                          aiSubtitleBox.classList.remove('active');
+                          setTimeout(() => {
+                              aiSubtitleBox.innerText = subtitleChunks[currentChunkIndex];
+                              aiSubtitleBox.classList.add('active');
+                          }, 150);
+                      }
+
+                      if (currentChunkIndex < speechChunks.length) {
+                          const utterance = new SpeechSynthesisUtterance(speechChunks[currentChunkIndex]);
+                          utterance.lang = (lang === 'en') ? 'en-US' : 'ja-JP';
+
+                          const targetVoice = getVoiceForLang(lang);
+                          if (targetVoice) utterance.voice = targetVoice;
+
+                          utterance.rate = (lang === 'en') ? 1.05 : 1.15;
+                          utterance.pitch = (lang === 'en') ? 1.15 : 1.35;
+
+                          utterance.onstart = () => {
+                              isSpeaking = true;
+                              stopSilenceTimer();
+                              updateAvatarState();
+                              aiStatusMsg.innerText = "TALKING";
+                          };
+
+                          utterance.onend = () => {
+                              currentChunkIndex++;
+                              playNextChunk();
+                          };
+                          synthesizer.speak(utterance);
+                      } else {
+                          setTimeout(() => {
+                              currentChunkIndex++;
+                              playNextChunk();
+                          }, 2000);
+                      }
+                  }
+
+                  playNextChunk();
+              }
+
+              function triggerTalk() {
+                  if (isSpeaking) return;
+                  const selectedText = getNextText();
+                  runAssistantVoice(selectedText, currentLang);
+              }
+
+              const TALK_INTERVAL = 2 * 60 * 1000;
+              setInterval(() => { triggerTalk(); }, TALK_INTERVAL);
+
+              // =========================================================
+              // 音声認識
+              // =========================================================
+              let isRecognitionActive = false;
+              let voiceRecognition = null;
+
+              const WebKitSpeech = window.SpeechRecognition || window.webkitSpeechRecognition;
+              if (WebKitSpeech) {
+                  voiceRecognition = new WebKitSpeech();
+                  voiceRecognition.continuous = true;
+                  voiceRecognition.interimResults = false;
+
+                  voiceRecognition.onstart = () => {
+                      isRecognitionActive = true;
+                  };
+
+                  voiceRecognition.onend = () => {
+                      isRecognitionActive = false;
+                      safeStartRecognition();
+                  };
+
+                  voiceRecognition.onerror = (e) => {
+                      if (e.error === "not-allowed") isRecognitionActive = false;
+                  };
+
+                  // ここで言葉を拾ってカットインやスパチャを呼び出します
+                  voiceRecognition.onresult = (event) => {
+                      resetSilenceTimer(); // 言葉を拾ったら20秒タイマーをリセット
+
+                      const currentIndex = event.resultIndex;
+                      const heardPhrase = event.results[currentIndex][0].transcript.trim().toLowerCase();
+                      const config = langConfig[currentLang];
+
+                      console.log("認識した言葉:", heardPhrase); // デバッグ用（F12の開発者ツールで確認可能）
+
+                      // スパチャ判定
+                      const isSC = config.scKeywords.some(keyword => heardPhrase.includes(keyword.toLowerCase()));
+                      if (isSC) {
+                          triggerSuperChatEffects();
+                          return;
+                      }
+
+                      // カットイン判定
+                      for (const rule of config.cutInRules) {
+                          const matched = rule.keywords.some(kw => heardPhrase.includes(kw.toLowerCase()));
+                          if (matched) {
+                              executePhraseCutIn(rule.text);
+                              return;
+                          }
+                      }
+                  };
+
+                  updateSpeechRecognitionLang();
+                  setInterval(() => { if (!isRecognitionActive) safeStartRecognition(); }, 1000);
+              } else {
+                  console.warn("Speech API 非対応ブラウザです。Chrome等を使用してください。");
+              }
+
+              function safeStartRecognition() {
+                  if (voiceRecognition && !isRecognitionActive) {
+                      try { voiceRecognition.start(); } catch (e) {}
+                  }
+              }
+
+              function updateSpeechRecognitionLang() {
+                  if (!voiceRecognition) return;
+                  if (isRecognitionActive) { voiceRecognition.stop(); }
+                  voiceRecognition.lang = langConfig[currentLang].recognitionLang;
+                  safeStartRecognition();
+              }
+
+              // 画面全体クリック時の処理（AI起動・タイマースタート）
+              document.body.addEventListener('click', (e) => {
+                  if (e.target === toggleBtn || e.target === toggleLangBtn) return;
+
+                  safeStartRecognition();
+                  resetSilenceTimer();
+                  triggerTalk();
+              });
     </script>
   </body>
 </html>
